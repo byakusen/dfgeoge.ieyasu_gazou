@@ -106,13 +106,22 @@
     position:relative;
     transition:transform .25s;
   }
-  .face img{
+  /* 口パク：閉じ口と開き口を同じ位置にぴったり重ねる
+     （揺れ防止：位置・大きさを固定し、opacityだけを切り替える。src差し替えやtransformは使わない） */
+  .face .mouth{
+    position:absolute;
+    inset:0;
     width:100%;height:100%;
     object-fit:cover;
     display:block;
   }
+  .face .mouth.closed{ z-index:1; }            /* 閉じ口：いつも見える（下） */
+  .face .mouth.open{ z-index:2; opacity:0; }   /* 開き口：ふだん透明（上に重ねる） */
+  .face.talking-open .mouth.open{ opacity:1; } /* talking-openの瞬間だけ開き口を表示 */
+  .face.no-img .mouth{ display:none; }
   .face-fallback{
     display:none;
+    position:absolute;inset:0;z-index:3;
     width:100%;height:100%;
     align-items:center;justify-content:center;
     font-family:'Yuji Syuku',serif;
@@ -121,7 +130,7 @@
     background:radial-gradient(circle at 50% 38%, #28341f, #13160f);
   }
   .face.no-img .face-fallback{display:flex;}
-  .face.talk{animation:nod .6s ease;}
+  /* （しゃべり時の縦揺れ nod は廃止し、口パクに置き換えました） */
   @keyframes nod{0%,100%{transform:translateY(0)}30%{transform:translateY(6px) rotate(-2deg)}60%{transform:translateY(0) rotate(2deg)}}
   .name-tag{
     margin-top:10px;font-family:'Yuji Syuku',serif;
@@ -412,8 +421,14 @@
     <div class="stage">
       <div class="ieyasu">
         <div class="face" id="face">
-          <img src="https://raw.githubusercontent.com/byakusen/dfgeoge.ieyasu_gazou/main/ieyasu.png" alt="徳川家康"
-               onerror="this.style.display='none';this.parentNode.classList.add('no-img');">
+          <img class="mouth closed"
+               src="https://raw.githubusercontent.com/byakusen/dfgeoge.ieyasu_gazou/main/ieyasu.png"
+               alt="徳川家康（口を閉じた絵）"
+               onerror="this.closest('.face').classList.add('no-img');">
+          <img class="mouth open"
+               src="https://github.com/byakusen/dfgeoge.ieyasu_gazou/blob/main/ieyasu2.png?raw=true"
+               alt="" aria-hidden="true"
+               onerror="this.style.display='none';">
           <span class="face-fallback">徳<br>川<br>家<br>康</span>
         </div>
         <div class="name-tag">徳川家康</div>
@@ -761,17 +776,30 @@ const answerEl = document.getElementById('answer');
 const faceEl = document.getElementById('face');
 let typing=null;
 
+// ===== 口パク（信長くんと同じ仕組み：talking-openのopacityを0.13秒ごとに切り替える。位置は一切動かさない＝揺れない） =====
+let mouthTimer=null;
+function startMouth(){
+  stopMouth();
+  mouthTimer=setInterval(()=>{ faceEl.classList.toggle('talking-open'); },130);
+}
+function stopMouth(){
+  if(mouthTimer){ clearInterval(mouthTimer); mouthTimer=null; }
+  faceEl.classList.remove('talking-open');
+}
+
 function speak(text, mood){
-  faceEl.classList.remove('talk','seikai','zannen'); void faceEl.offsetWidth;
-  faceEl.classList.add(mood || 'talk');
+  // ふつうのしゃべりは揺らさない。正解(seikai=うなずく)/不正解(zannen=横に振る)のときだけ演出。
+  faceEl.classList.remove('seikai','zannen'); void faceEl.offsetWidth;
+  if(mood==='seikai' || mood==='zannen') faceEl.classList.add(mood);
   if(typing) clearInterval(typing);
   answerEl.innerHTML="";
   let i=0;
   const cursor=document.createElement('span');
   cursor.className='cursor'; cursor.textContent='　';
   answerEl.appendChild(cursor);
+  startMouth();                 // しゃべりはじめ：口パク開始
   typing=setInterval(()=>{
-    if(i>=text.length){clearInterval(typing); cursor.remove(); return;}
+    if(i>=text.length){clearInterval(typing); cursor.remove(); stopMouth(); return;}  // しゃべりおわり：口を閉じる
     const ch=document.createTextNode(text[i]);
     answerEl.insertBefore(ch,cursor);
     i++;
